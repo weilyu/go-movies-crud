@@ -1,22 +1,96 @@
-/*
-Copyright © 2021 NAME HERE <EMAIL ADDRESS>
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
 package main
 
-import "github.com/gitpod/mycli/cmd"
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"math/rand"
+	"net/http"
+	"strconv"
+
+	"github.com/gorilla/mux"
+)
+
+type Movie struct {
+	ID       string    `json:"id"`
+	Isbn     string    `json:"isbn"`
+	Title    string    `json:"title"`
+	Director *Director `json:"director"`
+}
+
+type Director struct {
+	Firstname string `json:"firstname"`
+	Lastname  string `json:"lastname"`
+}
+
+var movies []Movie
+
+func getMovies(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(movies)
+}
+
+func deleteMovie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	for index, item := range movies {
+		if item.ID == params["id"] {
+			movies = append(movies[:index], movies[index+1:]...)
+			break
+		}
+	}
+}
+
+func getMovie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+	for _, item := range movies {
+		if item.ID == params["id"] {
+			json.NewEncoder(w).Encode(item)
+			return
+		}
+	}
+}
+
+func createMovie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	var movie Movie
+	_ = json.NewDecoder(r.Body).Decode(&movie)
+	movie.ID = strconv.Itoa(rand.Intn(100000))
+	movies = append(movies, movie)
+	json.NewEncoder(w).Encode(movie)
+}
+
+func updateMovie(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)
+
+	for index, item := range movies {
+		if item.ID == params["id"] {
+			var movie Movie
+			_ = json.NewDecoder(r.Body).Decode(&movie)
+			movies[index].Isbn = movie.Isbn
+			movies[index].Title = movie.Title
+			movies[index].Director = movie.Director
+			json.NewEncoder(w).Encode(movies[index])
+			return
+		}
+	}
+}
 
 func main() {
-	cmd.Execute()
+
+	r := mux.NewRouter()
+
+	movies = append(movies, Movie{ID: "1", Isbn: "43552", Title: "Moive one", Director: &Director{Firstname: "James", Lastname: "Cameron"}})
+	movies = append(movies, Movie{ID: "2", Isbn: "45982", Title: "Moive two", Director: &Director{Firstname: "Jone", Lastname: "Doe"}})
+
+	r.HandleFunc("/movies", getMovies).Methods("GET")
+	r.HandleFunc("/movies/{id}", getMovie).Methods("GET")
+	r.HandleFunc("/movies", createMovie).Methods("POST")
+	r.HandleFunc("/movies/{id}", updateMovie).Methods("PUT")
+	r.HandleFunc("/movies/{id}", deleteMovie).Methods("DELETE")
+
+	fmt.Printf("Starting server at port 8080=\n")
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
